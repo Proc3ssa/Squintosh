@@ -1,0 +1,4 @@
+# Lambda layer dependencies for the compression function
+# Install with:
+#   pip install -r requirements.txt -t ./python/lib/python3.12/site-packages/
+Pillow==10.3.0

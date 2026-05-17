@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SquishIt — Image Compressor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d0d;
+      --surface: #161616;
+      --surface2: #1f1f1f;
+      --border: #2a2a2a;
+      --accent: #c8f04b;
+      --accent-dim: rgba(200, 240, 75, 0.12);
+      --accent-glow: rgba(200, 240, 75, 0.25);
+      --text: #f0f0f0;
+      --muted: #666;
+      --danger: #ff4d4d;
+      --success: #4dff91;
+      --radius: 12px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      overflow-x: hidden;
+    }
+
+    /* Noise overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      padding: 28px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 1.6rem;
+      letter-spacing: -0.03em;
+      color: var(--text);
+    }
+
+    .logo span {
+      color: var(--accent);
+    }
+
+    .logo-tag {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ── Tabs ── */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      padding: 0 48px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 18px 24px;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s;
+    }
+
+    .tab-btn::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--accent);
+      transform: scaleX(0);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .tab-btn.active {
+      color: var(--accent);
+    }
+
+    .tab-btn.active::after {
+      transform: scaleX(1);
+    }
+
+    .tab-btn:hover:not(.active) {
+      color: var(--text);
+    }
+
+    /* ── Main ── */
+    main {
+      flex: 1;
+      padding: 48px;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; animation: fadeUp 0.3s ease; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Upload Panel ── */
+    .upload-grid {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 32px;
+      max-width: 1100px;
+    }
+
+    .drop-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      min-height: 380px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .drop-zone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, var(--accent-dim) 0%, transparent 70%);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .drop-zone:hover::before,
+    .drop-zone.dragover::before { opacity: 1; }
+
+    .drop-zone:hover,
+    .drop-zone.dragover {
+      border-color: var(--accent);
+    }
+
+    .drop-zone.dragover {
+      background: var(--surface2);
+    }
+
+    .drop-icon {
+      width: 64px;
+      height: 64px;
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      position: relative;
+      z-index: 1;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .drop-zone:hover .drop-icon {
+      border-color: var(--accent);
+      transform: translateY(-3px);
+    }
+
+    .drop-text {
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .drop-text h3 {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .drop-text p {
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    .browse-btn {
+      position: relative;
+      z-index: 1;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+
+    .browse-btn:hover {
+      background: var(--accent);
+      color: #000;
+      box-shadow: 0 0 24px var(--accent-glow);
+    }
+
+    #file-input { display: none; }
+
+    /* Preview inside drop zone */
+    .preview-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      padding: 24px;
+      opacity: 0.85;
+    }
+
+    .preview-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,0.85));
+      padding: 20px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* ── Upload Sidebar ── */
+    .upload-sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+
+    .card-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 3px;
+      border-radius: 2px;
+      background: var(--border);
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 0 10px var(--accent-glow);
+      transition: transform 0.15s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .slider-val {
+      font-size: 0.85rem;
+      color: var(--accent);
+      min-width: 36px;
+      text-align: right;
+    }
+
+    select {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      padding: 10px 12px;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    select:focus { border-color: var(--accent); }
+
+    .file-info {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+    }
+
+    .info-row .key { color: var(--muted); }
+    .info-row .val { color: var(--text); }
+
+    .upload-btn {
+      width: 100%;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      color: #000;
+      font-family: 'Syne', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 16px;
+      cursor: pointer;
+      transition: opacity 0.2s, box-shadow 0.2s, transform 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .upload-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .upload-btn:not(:disabled):hover {
+      box-shadow: 0 0 32px var(--accent-glow);
+      transform: translateY(-1px);
+    }
+
+    /* Progress bar */
+    .progress-wrap {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: none;
+    }
+
+    .progress-wrap.visible { display: block; }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      margin-bottom: 10px;
+    }
+
+    .progress-label .stage { color: var(--accent); }
+    .progress-label .pct { color: var(--muted); }
+
+    .progress-bar {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+
+    .toast {
+      margin-top: 12px;
+      font-size: 0.7rem;
+      padding: 10px 14px;
+      border-radius: 6px;
+      display: none;
+    }
+
+    .toast.success { background: rgba(77,255,145,0.1); border: 1px solid var(--success); color: var(--success); display: block; }
+    .toast.error   { background: rgba(255,77,77,0.1);  border: 1px solid var(--danger);  color: var(--danger);  display: block; }
+
+    /* ── Gallery Panel ── */
+    .gallery-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+    }
+
+    .gallery-header h2 {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 800;
+    }
+
+    .refresh-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 10px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .refresh-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 20px;
+    }
+
+    .img-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: border-color 0.2s, transform 0.2s;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    .img-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-4px);
+    }
+
+    .img-thumb {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      display: block;
+      background: var(--surface2);
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .img-thumb:hover { opacity: 0.85; }
+
+    .img-meta {
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .img-name {
+      font-size: 0.75rem;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .img-stats {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      color: var(--muted);
+    }
+
+    .img-actions {
+      display: flex;
+      gap: 8px;
+      padding: 0 16px 14px;
+    }
+
+    .btn-view, .btn-dl {
+      flex: 1;
+      border-radius: 6px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    .btn-view {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .btn-view:hover { border-color: var(--accent); color: var(--accent); }
+
+    .btn-dl {
+      background: var(--accent-dim);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-dl:hover {
+      background: var(--accent);
+      color: #000;
+    }
+
+    /* Empty state */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--muted);
+    }
+
+    .empty-state .empty-icon { font-size: 3rem; margin-bottom: 16px; }
+    .empty-state p { font-size: 0.78rem; letter-spacing: 0.05em; }
+
+    /* ── Lightbox ── */
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.92);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+      padding: 40px;
+      backdrop-filter: blur(8px);
+    }
+
+    .lightbox.open { display: flex; animation: fadeUp 0.25s ease; }
+
+    .lightbox img {
+      max-width: 100%;
+      max-height: 75vh;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      object-fit: contain;
+    }
+
+    .lightbox-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .lb-close, .lb-dl {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .lb-close {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .lb-close:hover { border-color: var(--danger); color: var(--danger); }
+
+    .lb-dl {
+      background: var(--accent);
+      border: 1px solid var(--accent);
+      color: #000;
+      font-weight: 600;
+    }
+
+    .lb-dl:hover { box-shadow: 0 0 24px var(--accent-glow); }
+
+    .lb-filename {
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Config Banner ── */
+    .config-banner {
+      background: rgba(200, 240, 75, 0.06);
+      border: 1px solid rgba(200, 240, 75, 0.2);
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-size: 0.7rem;
+      color: rgba(200, 240, 75, 0.7);
+      letter-spacing: 0.05em;
+      margin-bottom: 32px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    @media (max-width: 900px) {
+      header { padding: 20px 24px; }
+      .tab-bar { padding: 0 24px; }
+      main { padding: 32px 24px; }
+      .upload-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div>
+      <div class="logo">Squish<span>It</span></div>
+      <div class="logo-tag">// AWS Image Compressor</div>
+    </div>
+    <div class="status-pill">
+      <div class="status-dot"></div>
+      <span>Connected</span>
+    </div>
+  </header>
+
+  <nav class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('upload', this)">⬆ Upload</button>
+    <button class="tab-btn" onclick="switchTab('gallery', this)">⊞ Compressed Files</button>
+  </nav>
+
+  <main>
+
+    <!-- ─── UPLOAD TAB ─── -->
+    <div class="tab-panel active" id="tab-upload">
+
+      <div class="config-banner">
+        ⚠ Replace <strong style="color:var(--accent);margin:0 4px">API_GATEWAY_URL</strong> in the script below with your deployed API Gateway endpoint before using.
+      </div>
+
+      <div class="upload-grid">
+
+        <!-- Drop Zone -->
+        <div>
+          <div class="drop-zone" id="drop-zone"
+               onclick="document.getElementById('file-input').click()"
+               ondragover="handleDragOver(event)"
+               ondragleave="handleDragLeave(event)"
+               ondrop="handleDrop(event)">
+            <div class="drop-icon" id="drop-icon">🖼</div>
+            <div class="drop-text" id="drop-text">
+              <h3>Drop your image here</h3>
+              <p>JPG · PNG · WEBP · GIF</p>
+            </div>
+            <button class="browse-btn" onclick="event.stopPropagation(); document.getElementById('file-input').click()">Browse Files</button>
+            <input type="file" id="file-input" accept="image/*" onchange="handleFileSelect(event)"/>
+            <img class="preview-img" id="preview-img" style="display:none"/>
+            <div class="preview-overlay" id="preview-overlay" style="display:none">
+              <span id="preview-name"></span>
+              <span id="preview-size"></span>
+            </div>
+          </div>
+
+          <!-- Progress -->
+          <div class="progress-wrap" id="progress-wrap" style="margin-top:20px">
+            <div class="progress-label">
+              <span class="stage" id="progress-stage">Uploading…</span>
+              <span class="pct" id="progress-pct">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+            <div class="toast" id="upload-toast"></div>
+          </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="upload-sidebar">
+
+          <div class="card">
+            <div class="card-title">Compression Settings</div>
+
+            <div class="field">
+              <label>Quality</label>
+              <div class="slider-wrap">
+                <input type="range" id="quality" min="10" max="95" value="75" oninput="document.getElementById('quality-val').textContent=this.value+'%'"/>
+                <span class="slider-val" id="quality-val">75%</span>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Output Format</label>
+              <select id="fmt">
+                <option value="same">Same as source</option>
+                <option value="jpeg">JPEG</option>
+                <option value="png">PNG</option>
+                <option value="webp">WebP</option>
+              </select>
+            </div>
+
+            <div class="field" style="margin-bottom:0">
+              <label>Max Dimension (px)</label>
+              <select id="max-dim">
+                <option value="0">No resize</option>
+                <option value="1920">1920 (Full HD)</option>
+                <option value="1280">1280 (HD)</option>
+                <option value="800">800 (Web)</option>
+                <option value="400">400 (Thumb)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card" id="file-info-card" style="display:none">
+            <div class="card-title">File Info</div>
+            <div class="file-info">
+              <div class="info-row"><span class="key">Name</span><span class="val" id="info-name">—</span></div>
+              <div class="info-row"><span class="key">Size</span><span class="val" id="info-size">—</span></div>
+              <div class="info-row"><span class="key">Type</span><span class="val" id="info-type">—</span></div>
+            </div>
+          </div>
+
+          <button class="upload-btn" id="upload-btn" disabled onclick="uploadImage()">
+            Upload &amp; Compress →
+          </button>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── GALLERY TAB ─── -->
+    <div class="tab-panel" id="tab-gallery">
+      <div class="gallery-header">
+        <h2>Compressed Files</h2>
+        <button class="refresh-btn" onclick="loadGallery()">
+          <span id="refresh-icon">↻</span> Refresh
+        </button>
+      </div>
+
+      <div class="config-banner">
+        ⚠ Gallery loads from <strong style="color:var(--accent);margin:0 4px">API_GATEWAY_URL/list</strong> — deploy your backend first.
+      </div>
+
+      <div class="gallery-grid" id="gallery-grid">
+        <div class="empty-state">
+          <div class="empty-icon">📭</div>
+          <p>No compressed images yet.<br/>Upload something on the Upload tab.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <div class="lb-filename" id="lb-filename"></div>
+  <img id="lb-img" src="" alt="Preview" onclick="event.stopPropagation()"/>
+  <div class="lightbox-actions" onclick="event.stopPropagation()">
+    <button class="lb-close" onclick="closeLightbox()">✕ Close</button>
+    <a class="lb-dl" id="lb-dl-link" href="#" download>↓ Download</a>
+  </div>
+</div>
+
+<script>
+  /* ════════════════════════════════════════════════
+     CONFIG — replace with your deployed API Gateway URL
+     e.g. https://abc123.execute-api.us-east-1.amazonaws.com/prod
+  ════════════════════════════════════════════════ */
+  const API_BASE = 'https://50b0i826al.execute-api.us-east-1.amazonaws.com/prod';
+
+  /* ── Tabs ── */
+  function switchTab(name, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+    if (name === 'gallery') loadGallery();
+  }
+
+  /* ── Drag & Drop ── */
+  let selectedFile = null;
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.add('dragover');
+  }
+
+  function handleDragLeave() {
+    document.getElementById('drop-zone').classList.remove('dragover');
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) applyFile(file);
+  }
+
+  function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (file) applyFile(file);
+  }
+
+  function applyFile(file) {
+    selectedFile = file;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = document.getElementById('preview-img');
+      img.src = ev.target.result;
+      img.style.display = 'block';
+      document.getElementById('drop-icon').style.display = 'none';
+      document.getElementById('drop-text').style.display = 'none';
+      document.querySelector('.browse-btn').style.display = 'none';
+      document.getElementById('preview-name').textContent = file.name;
+      document.getElementById('preview-size').textContent = fmtSize(file.size);
+      document.getElementById('preview-overlay').style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
+
+    document.getElementById('info-name').textContent = file.name;
+    document.getElementById('info-size').textContent = fmtSize(file.size);
+    document.getElementById('info-type').textContent = file.type;
+    document.getElementById('file-info-card').style.display = 'block';
+    document.getElementById('upload-btn').disabled = false;
+
+    hideToast();
+  }
+
+  function fmtSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(2) + ' MB';
+  }
+
+  /* ── Upload ── */
+  async function uploadImage() {
+    if (!selectedFile) return;
+    const quality = document.getElementById('quality').value;
+    const fmt = document.getElementById('fmt').value;
+    const maxDim = document.getElementById('max-dim').value;
+
+    setProgress(true, 'Requesting upload URL…', 10);
+
+    try {
+      // Step 1: Get presigned upload URL
+      const metaRes = await fetch(`${API_BASE}/upload-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: selectedFile.name,
+          content_type: selectedFile.type,
+          quality: parseInt(quality),
+          format: fmt,
+          max_dimension: parseInt(maxDim)
+        })
+      });
+
+      if (!metaRes.ok) throw new Error('Failed to get upload URL');
+      const { upload_url, key } = await metaRes.json();
+
+      setProgress(true, 'Uploading to S3…', 40);
+
+      // Step 2: Upload directly to S3
+      const s3Res = await fetch(upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': selectedFile.type },
+        body: selectedFile
+      });
+
+      if (!s3Res.ok) throw new Error('S3 upload failed');
+      setProgress(true, 'Compressing…', 75);
+
+      // Simulate compression wait (Lambda fires async)
+      await new Promise(r => setTimeout(r, 2000));
+
+      setProgress(true, 'Done!', 100);
+      showToast('success', `✓ Uploaded & queued for compression — check the gallery in a moment.`);
+      document.getElementById('upload-btn').disabled = true;
+
+    } catch (err) {
+      setProgress(true, 'Error', 100);
+      showToast('error', `✗ ${err.message}`);
+    }
+  }
+
+  function setProgress(visible, stage, pct) {
+    const wrap = document.getElementById('progress-wrap');
+    wrap.classList.toggle('visible', visible);
+    document.getElementById('progress-stage').textContent = stage;
+    document.getElementById('progress-pct').textContent = pct + '%';
+    document.getElementById('progress-fill').style.width = pct + '%';
+  }
+
+  function showToast(type, msg) {
+    const t = document.getElementById('upload-toast');
+    t.className = 'toast ' + type;
+    t.textContent = msg;
+  }
+
+  function hideToast() {
+    document.getElementById('upload-toast').className = 'toast';
+  }
+
+  /* ── Gallery ── */
+  async function loadGallery() {
+    const grid = document.getElementById('gallery-grid');
+    const icon = document.getElementById('refresh-icon');
+    icon.style.animation = 'spin 0.8s linear infinite';
+    grid.innerHTML = '';
+
+    try {
+      const res = await fetch(`${API_BASE}/list`);
+      if (!res.ok) throw new Error('Could not load files');
+      const files = await res.json(); // [{ key, url, size, last_modified }]
+
+      if (!files.length) {
+        grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>No compressed images yet.<br/>Upload something on the Upload tab.</p></div>`;
+        return;
+      }
+
+      files.forEach((f, i) => {
+        const card = document.createElement('div');
+        card.className = 'img-card';
+        card.style.animationDelay = (i * 0.06) + 's';
+        const name = f.key.split('/').pop();
+        const date = new Date(f.last_modified).toLocaleDateString();
+        card.innerHTML = `
+          <img class="img-thumb" src="${f.url}" alt="${name}" loading="lazy" onclick="openLightbox('${f.url}','${name}')"/>
+          <div class="img-meta">
+            <div class="img-name">${name}</div>
+            <div class="img-stats"><span>${fmtSize(f.size)}</span><span>${date}</span></div>
+          </div>
+          <div class="img-actions">
+            <button class="btn-view" onclick="openLightbox('${f.url}','${name}')">View</button>
+            <a class="btn-dl" href="${f.url}" download="${name}" target="_blank">Download</a>
+          </div>`;
+        grid.appendChild(card);
+      });
+
+    } catch (err) {
+      grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠</div><p>${err.message}<br/><small style="color:var(--muted)">Make sure your backend is deployed.</small></p></div>`;
+    } finally {
+      icon.style.animation = '';
+    }
+  }
+
+  /* ── Lightbox ── */
+  function openLightbox(url, name) {
+    document.getElementById('lb-img').src = url;
+    document.getElementById('lb-filename').textContent = name;
+    document.getElementById('lb-dl-link').href = url;
+    document.getElementById('lb-dl-link').download = name;
+    document.getElementById('lightbox').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+  /* ── Spin keyframe ── */
+  const style = document.createElement('style');
+  style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+  document.head.appendChild(style);
+</script>
+</body>
+</html>
