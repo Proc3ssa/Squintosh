@@ -278,7 +278,7 @@ resource "aws_lambda_permission" "allow_apigw" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.api.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
+  source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/${aws_api_gateway_stage.prod.stage_name}/*/*"
 }
 
 
@@ -428,7 +428,6 @@ resource "aws_api_gateway_integration_response" "list_options" {
 # ── Deployment ───────────────────────────────
 resource "aws_api_gateway_deployment" "prod" {
   rest_api_id = aws_api_gateway_rest_api.api.id
-  stage_name  = "prod"
 
   triggers = {
     redeployment = sha1(jsonencode([
@@ -449,4 +448,16 @@ resource "aws_api_gateway_deployment" "prod" {
     aws_api_gateway_integration.upload_url_post,
     aws_api_gateway_integration.list_get,
   ]
+}
+
+resource "aws_api_gateway_stage" "prod" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  deployment_id = aws_api_gateway_deployment.prod.id
+  stage_name    = "prod"
+  description   = "SquishIt production stage"
+
+  tags = {
+    Project     = "squishit"
+    Environment = var.environment
+  }
 }

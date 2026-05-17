@@ -1,16 +1,16 @@
 output "api_url" {
   description = "Base URL of the API Gateway"
-  value       = aws_api_gateway_deployment.prod.invoke_url
+  value       = aws_api_gateway_stage.prod.invoke_url
 }
 
 output "upload_url_endpoint" {
   description = "POST endpoint to get a presigned upload URL"
-  value       = "${aws_api_gateway_deployment.prod.invoke_url}/upload-url"
+  value       = "${aws_api_gateway_stage.prod.invoke_url}/upload-url"
 }
 
 output "list_endpoint" {
   description = "GET endpoint to list compressed images"
-  value       = "${aws_api_gateway_deployment.prod.invoke_url}/list"
+  value       = "${aws_api_gateway_stage.prod.invoke_url}/list"
 }
 
 output "raw_bucket_name" {
@@ -35,5 +35,5 @@ output "api_lambda_arn" {
 
 output "frontend_config" {
   description = "One-liner to wire the API URL into index.html"
-  value       = "sed -i 's|YOUR_API_GATEWAY_URL|${aws_api_gateway_deployment.prod.invoke_url}|g' ../index.html"
+  value       = "sed -i 's|YOUR_API_GATEWAY_URL|${aws_api_gateway_stage.prod.invoke_url}|g' ../index.html"
 }
