@@ -18,6 +18,7 @@
 5. You view and download compressed images from the gallery tab
 
 ---
+<img width="1250" height="680" alt="brave_screenshot" src="https://github.com/user-attachments/assets/727de8fc-4b69-4157-a10b-1c530a7585ac" />
 
 ## Architecture
 
@@ -40,6 +41,8 @@ Browser (index.html)
     └── GET /list ────────────────────→ API Gateway ──→ squishit-api Lambda
                                                     returns presigned GET URLs
 ```
+<img width="1254" height="438" alt="brave_screenshot_us-east-1 console aws amazon com" src="https://github.com/user-attachments/assets/2dad05a6-7a08-42e3-9eb3-3e3547d9d61b" />
+
 
 ### AWS Services used
 
